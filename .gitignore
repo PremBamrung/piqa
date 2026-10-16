@@ -1,28 +1,13 @@
-# Compiled Python files
-*.pyc
 __pycache__/
-
-# Virtual environment
-venv/
-env/
-
-# Dependencies
-/.venv
-/.env
-/.pytest_cache/
-/.mypy_cache/
-/.coverage
-/.cache/
-
-# Logs
-*.log
-
-# Editor and IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Docker
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
 .DS_Store
 
+# piqa caches and outputs
+.piqa/
+*.npz

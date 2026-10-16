@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}} · wall</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0a; overflow: hidden; font-family: ui-monospace, monospace; color: #888; }
+  #canvas { display: block; cursor: grab; touch-action: none; }
+  #canvas.dragging { cursor: grabbing; }
+  .chip {
+    position: fixed; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+    border: 1px solid #222; border-radius: 8px; font-size: 12px; color: #666;
+  }
+  #hud { top: 16px; left: 50%; transform: translateX(-50%); padding: 7px 18px;
+         pointer-events: none; white-space: nowrap; max-width: calc(100vw - 32px);
+         overflow: hidden; text-overflow: ellipsis; }
+  #hud span { color: #ccc; }
+  #reset { bottom: 20px; right: 20px; padding: 7px 14px; cursor: pointer; font-family: inherit; }
+  #reset:hover { color: #ccc; }
+  #tooltip { display: none; padding: 4px 8px; font-size: 11px; color: #aaa; pointer-events: none; }
+  #lightbox {
+    display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.94);
+    align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+  }
+  #lightbox.open { display: flex; }
+  #lightbox img { max-width: 92vw; max-height: 85vh; object-fit: contain; border-radius: 4px; }
+  #lb-name { font-size: 12px; color: #777; }
+  #lb-name a { color: #6aa9ff; }
+  #lb-close { position: fixed; top: 16px; right: 22px; font-size: 26px; color: #555; cursor: pointer; }
+  #lb-close:hover { color: #fff; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="hud" class="chip">{{TITLE}} · <span id="count"></span> images · scroll to zoom · drag to pan · click to open</div>
+<button id="reset" class="chip">RESET VIEW</button>
+<div id="tooltip" class="chip"></div>
+<div id="lightbox">
+  <div id="lb-close">✕</div>
+  <img id="lb-img" alt="">
+  <div id="lb-name"></div>
+</div>
+<script>
+const DATA = /*{{DATA}}*/;
+const ITEMS = DATA.items;
+const N = ITEMS.length;
+const SMALL = 128;       // px, long edge of the "s" thumbnail tier
+const MAX_SIZE = 512;    // px, long edge of the "m" tier: never draw bigger than this
+const $ = id => document.getElementById(id);
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+$('count').textContent = N;
+
+// ── View: item (x, y) in [0,1] maps to (offsetX + x*scale, offsetY + y*scale) ──
+const PADDING = 80;
+let scale, offsetX, offsetY;
+function resetView() {
+  scale = Math.max(100, Math.min(innerWidth, innerHeight) - PADDING * 2);
+  offsetX = (innerWidth - scale) / 2;
+  offsetY = (innerHeight - scale) / 2;
+}
+
+// ── Images: all small thumbs up front, medium thumbs lazily when zoomed in ──
+const small = new Array(N).fill(null);
+const medium = new Array(N).fill(null);
+const mediumRequested = new Uint8Array(N);
+let pending = false;
+function requestDraw() {
+  if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; draw(); }); }
+}
+function load(src, onload) {
+  const im = new Image();
+  im.onload = () => { onload(im); requestDraw(); };
+  im.src = src;
+}
+ITEMS.forEach((it, i) => load(it.s, im => { small[i] = im; }));
+
+function sizeOf(i) {
+  // Long edge grows with zoom; aspect ratio from whichever thumb has loaded (3:2 until then).
+  const long = Math.min(MAX_SIZE, Math.max(18, scale * 0.04));
+  const im = medium[i] || small[i];
+  const ratio = im ? im.naturalHeight / im.naturalWidth : 2 / 3;
+  return ratio <= 1 ? { w: long, h: long * ratio } : { w: long / ratio, h: long };
+}
+
+function draw() {
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
+  for (let i = 0; i < N; i++) {
+    const it = ITEMS[i];
+    const { w, h } = sizeOf(i);
+    const x = offsetX + it.x * scale - w / 2;
+    const y = offsetY + it.y * scale - h / 2;
+    if (x + w < 0 || y + h < 0 || x > canvas.width || y > canvas.height) continue;  // off-screen
+    if (Math.max(w, h) > SMALL * 1.2 && !mediumRequested[i]) {
+      mediumRequested[i] = 1;
+      load(it.m, im => { medium[i] = im; });
+    }
+    const im = (Math.max(w, h) > SMALL * 1.2 && medium[i]) || small[i];
+    if (im) {
+      ctx.drawImage(im, x, y, w, h);
+    } else {
+      ctx.fillStyle = '#1c1c1c';
+      ctx.fillRect(x, y, w, h);
+    }
+  }
+}
+
+function hitTest(mx, my) {
+  let best = -1, bestDist = Infinity;
+  for (let i = 0; i < N; i++) {
+    const { w, h } = sizeOf(i);
+    const dx = mx - (offsetX + ITEMS[i].x * scale);
+    const dy = my - (offsetY + ITEMS[i].y * scale);
+    if (Math.abs(dx) < w / 2 && Math.abs(dy) < h / 2 && dx * dx + dy * dy < bestDist) {
+      bestDist = dx * dx + dy * dy;
+      best = i;
+    }
+  }
+  return best;
+}
+
+// ── Lightbox: medium thumb immediately, swapped for the original once it loads ──
+function openLightbox(i) {
+  const it = ITEMS[i];
+  const img = $('lb-img');
+  img.src = it.m;
+  const full = new Image();
+  full.onload = () => { if (img.dataset.i === String(i)) img.src = it.orig; };
+  img.dataset.i = i;
+  full.src = it.orig;
+  $('lb-name').innerHTML = '';
+  const link = document.createElement('a');
+  link.href = it.orig;
+  link.target = '_blank';
+  link.textContent = it.dir ? `${it.dir}/${it.name}` : it.name;
+  $('lb-name').appendChild(link);
+  $('lightbox').classList.add('open');
+}
+const closeLightbox = () => $('lightbox').classList.remove('open');
+$('lb-close').addEventListener('click', closeLightbox);
+$('lightbox').addEventListener('click', e => { if (e.target.id === 'lightbox') closeLightbox(); });
+addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ── Pointer: drag to pan, click to open, wheel / pinch to zoom ──
+function zoomAt(mx, my, factor) {
+  offsetX = mx - (mx - offsetX) * factor;
+  offsetY = my - (my - offsetY) * factor;
+  scale *= factor;
+  requestDraw();
+}
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+}, { passive: false });
+
+const pointers = new Map();
+let moved = false, pinchDist = null;
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  moved = false;
+  canvas.classList.add('dragging');
+});
+canvas.addEventListener('pointermove', e => {
+  const prev = pointers.get(e.pointerId);
+  if (!prev) {
+    const i = hitTest(e.clientX, e.clientY);
+    const tip = $('tooltip');
+    tip.style.display = i < 0 ? 'none' : 'block';
+    if (i >= 0) {
+      tip.textContent = ITEMS[i].name;
+      tip.style.left = (e.clientX + 14) + 'px';
+      tip.style.top = (e.clientY - 28) + 'px';
+    }
+    return;
+  }
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinchDist) zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, dist / pinchDist);
+    pinchDist = dist;
+    moved = true;
+  } else if (pointers.size === 1) {
+    const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+    if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
+    offsetX += dx;
+    offsetY += dy;
+    requestDraw();
+  }
+});
+function pointerEnd(e) {
+  if (pointers.size === 1 && !moved) {
+    const i = hitTest(e.clientX, e.clientY);
+    if (i >= 0) openLightbox(i);
+  }
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinchDist = null;
+  if (!pointers.size) canvas.classList.remove('dragging');
+}
+canvas.addEventListener('pointerup', pointerEnd);
+canvas.addEventListener('pointercancel', e => { moved = true; pointerEnd(e); });
+
+$('reset').addEventListener('click', () => { resetView(); requestDraw(); });
+addEventListener('resize', requestDraw);
+resetView();
+draw();
+</script>
+</body>
+</html>

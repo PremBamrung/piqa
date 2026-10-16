@@ -1,57 +1,77 @@
-# PIX (Python Image eXplorer)
+# piqa
 
-PIX is a powerful Python library and software stack for image analysis, search, and visualization. It provides a comprehensive set of functionalities to manage image databases, detect duplicates, compute clip embeddings, perform similarity-based image retrieval, and visualize datasets. PIX is designed to be versatile, allowing integration with other tools and frameworks to create complete image analysis and exploration software.
+**P**ython **I**mage **Q**uality **A**ssessment: a local, self-hosted pre-editing engine for
+Fuji JPEG/RAF libraries. Sort cards, map a shoot by visual similarity, and soon: `piqa choose`.
 
-## Features
+See [docs/CONTEXT.md](docs/CONTEXT.md) for the vision, decisions and roadmap, and
+[docs/PROGRESS.md](docs/PROGRESS.md) for the current milestone.
 
-- **Duplicate Image Detection**: PIX includes algorithms to detect duplicate images within a database, helping users identify and manage duplicate entries efficiently.
-- **Clip Embedding Computation**: The library enables the computation of clip embeddings for images, allowing for semantic understanding and similarity comparison based on textual prompts.
-- **Similarity-Based Image Retrieval**: PIX provides functionality to search for visually similar images based on a given prompt or query, leveraging clip embeddings for accurate and efficient retrieval.
-- **Image Database Management**: PIX allows users to manage image databases, including storing images, associated metadata, and computed embeddings.
-- **Dataset Visualization**: The library offers tools to visualize datasets in 2D or 3D representations, enabling users to explore and gain insights into the distribution and relationships within the dataset.
+## Commands
 
-## Project Structure
+Run from your library root (the folder holding `piqa.toml` and the `Import/` folder that
+`ingest` sorts into by default):
 
-The project structure is organized as follows:
+```shell
+piqa ingest                      # sort loose files in Import/ into Import/<date>/<EXT>/ (moves)
+piqa ingest <card>               # copy a card or folder into Import/<date>/<EXT>/
+piqa ingest <card> -n            # dry run: show what would happen
+piqa ingest <card> --dest <dir>  # sort into another root instead of Import/
 
-- `pix/`: The PIX library package containing the core functionalities.
-- `notebooks/`: Example notebooks demonstrating the usage of the PIX library.
-- `app/`: The complete software stack utilizing the PIX library, including a FastAPI app, a Streamlit app, and integration modules for Redis, Celery, and a vector database.
-- `.github/`: GitHub Actions workflows for linting, testing, and CI/CD.
-- `docker-compose.yml`: Docker Compose file for building and managing the whole stack.
-- `Dockerfile`: Dockerfile for building the PIX library and associated app.
-- `requirements.txt`: Required dependencies for the project.
-- `setup.py`: Packaging file for the PIX library.
-- `README.md`: Documentation and instructions for the project.
+piqa map <folder> --open         # embed + UMAP + viewers, then open the wall
+piqa map <folder> --max-images 200 --color-by top
+piqa embed <folder>              # embeddings + thumbnails only
 
-## Getting Started
-
-To get started with PIX, follow these steps:
-
-1. Clone the repository:
-
-```bash
-git clone https://github.com/your-username/pix.git
+piqa diff <a> <b> -v             # files in <a> missing from <b> (same relative paths)
 ```
 
-2. Install the required dependencies:
+`piqa <command> --help` lists every option (model, batch size, UMAP settings, …).
 
-```bash
-pip install -r requirements.txt
+`ingest` dates files by EXIF capture date (a RAF follows its JPEG; videos use the file date)
+and never overwrites: existing files are skipped and reported.
+
+`embed`/`map` write everything into `<folder>/.piqa/`:
+
+| File | What |
+|---|---|
+| `embeddings-<model>.npz` | DINOv3 vectors; re-runs only embed new or changed files |
+| `thumbs/s/`, `thumbs/m/` | 128 px and 512 px thumbnails, made during the same read |
+| `coords.npz` | 2-D UMAP coordinates |
+| `map.html` | scatter (WebGL); hover to preview, click to open the original |
+| `wall.html` | every thumbnail at its UMAP position; zoom, pan, click for a lightbox |
+
+The viewers load thumbnails from `.piqa/thumbs/`, so keep them inside the folder.
+
+## Configuration
+
+`piqa.toml`, looked up from the current directory upwards (paths relative to the file):
+
+```toml
+[dinov3]
+repo = "dinov3_repo"        # local clone of facebookresearch/dinov3
+weights = "dinov3"          # a .pth file, or a folder with <model>_pretrain_*.pth
+model = "dinov3_vits16"     # or dinov3_vitb16, dinov3_vitl16, dinov3_vith16plus
 ```
 
-3. Explore the example notebooks in the `notebooks/` directory to understand the usage of the PIX library.
+## Install
 
-4. Customize and integrate the PIX library into your own projects or use the complete software stack in the `app/` directory as a starting point.
+Run piqa **natively on Windows or macOS**, not from WSL on `/mnt/<drive>`: the WSL↔Windows
+file bridge reads photos ~5× slower (see docs/CONTEXT.md).
 
+Install [uv](https://docs.astral.sh/uv/), then:
 
-## License
+```shell
+uv tool install --editable <path-to-this-repo>   # puts `piqa` on PATH; code edits apply immediately
+piqa --version
+```
 
-This project is licensed under the [MIT License](LICENSE).
+Windows/Linux get CUDA 12.8 PyTorch (needed for RTX 50xx); macOS gets the standard build
+and uses the Apple GPU (MPS).
 
-## Acknowledgements
+## Development
 
-We would like to thank the contributors and the open-source community for their valuable contributions and support.
-
-
----
+```bash
+uv sync                    # creates .venv in the repo (from WSL, set UV_PROJECT_ENVIRONMENT
+                           # to a path outside the repo so it doesn't clash with Windows')
+uv run pytest
+uv run ruff check . && uv run ruff format --check .
+```
