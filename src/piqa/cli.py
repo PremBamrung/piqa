@@ -12,10 +12,7 @@ from piqa import __version__
 def cmd_ingest(args: argparse.Namespace) -> None:
     from piqa.ingest import ingest
 
-    dest = args.dest
-    src = args.source or dest
-    copy = src.resolve() != dest.resolve() and not args.move
-    ingest(src, dest, copy=copy, dry_run=args.dry_run)
+    ingest(args.folder, dry_run=args.dry_run)
 
 
 def _embed(args: argparse.Namespace) -> Path:
@@ -65,20 +62,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"piqa {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("ingest", help="sort camera files into <dest>/<date>/<EXT>/")
+    p = sub.add_parser("ingest", help="sort the loose files in Import/ into <date>/<EXT>/")
     p.add_argument(
-        "source",
+        "folder",
         nargs="?",
         type=Path,
-        help="card or folder to import (default: sort the loose files in DEST)",
-    )
-    p.add_argument(
-        "--dest", type=Path, default=Path("Import"), help="destination root (default: ./Import)"
-    )
-    p.add_argument(
-        "--move",
-        action="store_true",
-        help="move instead of copy when importing from another folder",
+        default=Path("Import"),
+        help="folder holding the copied files (default: ./Import)",
     )
     p.add_argument("-n", "--dry-run", action="store_true", help="show what would happen")
     p.set_defaults(func=cmd_ingest)
@@ -88,7 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--model", help="DINOv3 hub model, e.g. dinov3_vitb16 (default: piqa.toml)")
         p.add_argument("--batch-size", type=int, default=64)
         p.add_argument("--workers", type=int, help="image decoding processes (default: up to 8)")
-        p.add_argument("--max-images", type=int, help="only the first N images (quick tests)")
+        p.add_argument("--max-images", type=int, help="a random sample of N images (quick tests)")
         p.add_argument("--fp32", action="store_true", help="disable fp16 on CUDA")
 
     p = sub.add_parser("embed", help="compute DINOv3 embeddings + thumbnails into <folder>/.piqa/")

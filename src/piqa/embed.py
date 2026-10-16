@@ -7,6 +7,7 @@ Re-runs only process new or changed files.
 from __future__ import annotations
 
 import os
+import random
 import sys
 import time
 from pathlib import Path
@@ -131,8 +132,9 @@ def embed(
 ) -> Path:
     """Embed every image under `root` and return the path of the embeddings file."""
     paths = find_images(root)
-    if max_images:
-        paths = paths[:max_images]
+    if max_images and max_images < len(paths):
+        # A seeded sample spans every folder; the first N would mostly be the first folder.
+        paths = sorted(random.Random(0).sample(paths, max_images))
     if not paths:
         raise SystemExit(f"No images found under {root}")
 
@@ -165,6 +167,9 @@ def embed(
             batch_size=batch_size,
             num_workers=workers,
             pin_memory=device.type == "cuda",
+            # macOS defaults to spawn, whose workers don't exit: torch then waits 5 s per worker
+            # after the last batch. Windows has no forkserver.
+            multiprocessing_context="forkserver" if workers and sys.platform != "win32" else None,
         )
         t0 = time.time()
         with torch.inference_mode():
