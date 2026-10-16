@@ -1,7 +1,8 @@
 # piqa
 
 **P**ython **I**mage **Q**uality **A**ssessment: a local, self-hosted pre-editing engine for
-Fuji JPEG/RAF libraries. Sort cards, map a shoot by visual similarity, and soon: `piqa choose`.
+Fuji JPEG/RAF libraries. Sort imports by date, lay a shoot out by visual similarity, and soon:
+`piqa choose`.
 
 See [docs/CONTEXT.md](docs/CONTEXT.md) for the vision, decisions and roadmap, and
 [docs/PROGRESS.md](docs/PROGRESS.md) for the current milestone.
@@ -12,13 +13,12 @@ Run from your library root (the folder holding `piqa.toml` and the `Import/` fol
 `ingest` sorts into by default):
 
 ```shell
-piqa ingest                      # sort loose files in Import/ into Import/<date>/<EXT>/ (moves)
-piqa ingest <card>               # copy a card or folder into Import/<date>/<EXT>/
-piqa ingest <card> -n            # dry run: show what would happen
-piqa ingest <card> --dest <dir>  # sort into another root instead of Import/
+piqa ingest                      # sort the files you copied into Import/ into Import/<date>/<EXT>/
+piqa ingest -n                   # dry run: show what would happen
+piqa ingest <folder>             # sort another folder's loose files instead of Import/
 
-piqa map <folder> --open         # embed + UMAP + viewers, then open the wall
-piqa map <folder> --max-images 200 --color-by top
+piqa wall <folder> --open        # embed + layout + wall viewer, then open it
+piqa wall <folder> --max-images 200 --color-by top
 piqa embed <folder>              # embeddings + thumbnails only
 
 piqa diff <a> <b> -v             # files in <a> missing from <b> (same relative paths)
@@ -26,20 +26,29 @@ piqa diff <a> <b> -v             # files in <a> missing from <b> (same relative 
 
 `piqa <command> --help` lists every option (model, batch size, UMAP settings, …).
 
-`ingest` dates files by EXIF capture date (a RAF follows its JPEG; videos use the file date)
-and never overwrites: existing files are skipped and reported.
+piqa never reads a memory card: copy the card's files into `Import/` yourself, then run
+`piqa ingest`. It moves the loose files sitting directly in `Import/` (subfolders are left
+alone), dates them by EXIF capture date (a RAF follows its JPEG; videos use the file date) and
+never overwrites. A file already sorted is skipped and reported. When a *different* file
+already has the name (two bodies both write `DSCF####`), the incoming file and its RAF/JPG
+partner get the camera model as a suffix: `DSCF0412_XE3.JPG`.
 
-`embed`/`map` write everything into `<folder>/.piqa/`:
+`embed`/`wall` write everything into `<folder>/.piqa/`:
 
 | File | What |
 |---|---|
 | `embeddings-<model>.npz` | DINOv3 vectors; re-runs only embed new or changed files |
 | `thumbs/s/`, `thumbs/m/` | 128 px and 512 px thumbnails, made during the same read |
-| `coords.npz` | 2-D UMAP coordinates |
-| `map.html` | scatter (WebGL); hover to preview, click to open the original |
-| `wall.html` | every thumbnail at its UMAP position; zoom, pan, click for a lightbox |
+| `coords.npz` | 2-D UMAP coordinates (reused while the embeddings and settings don't change) |
+| `grid.npz` | the UMAP layout snapped to a grid (one photo per cell), and the free layout spread so photos stop overlapping once zoomed in |
+| `atlas/` | every photo at 64 px packed into a few sprite sheets, for a fast overview |
+| `wall.html` | the wall: similar photos side by side; zoom, pan, click for a lightbox |
 
-The viewers load thumbnails from `.piqa/thumbs/`, so keep them inside the folder.
+The wall loads everything from `.piqa/` by relative path, so keep it inside the folder. In the
+page: **G** switches grid / free UMAP layout, **P** a preview panel, **/** search, the legend
+filters by folder, the minimap jumps around, and the lightbox steps through the 12 most
+similar photos with **← →**. **?** lists every key. The view is kept in the URL, so a reload
+or a bookmark lands where you were.
 
 ## Configuration
 

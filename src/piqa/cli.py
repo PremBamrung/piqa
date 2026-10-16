@@ -36,19 +36,19 @@ def cmd_embed(args: argparse.Namespace) -> None:
     _embed(args)
 
 
-def cmd_map(args: argparse.Namespace) -> None:
-    from piqa.viewers import reduce, write_viewers
+def cmd_wall(args: argparse.Namespace) -> None:
+    from piqa.viewers import reduce, write_wall
 
     emb_path = _embed(args)
-    rels, coords = reduce(
+    layout = reduce(
         emb_path,
         n_neighbors=args.n_neighbors,
         min_dist=args.min_dist,
         seed=None if args.parallel else args.seed,
     )
-    map_html, wall_html = write_viewers(args.folder, rels, coords, color_by=args.color_by)
+    wall_html = write_wall(args.folder, layout, color_by=args.color_by, initial_layout=args.layout)
     if args.open:
-        webbrowser.open((wall_html if args.open == "wall" else map_html).resolve().as_uri())
+        webbrowser.open(wall_html.resolve().as_uri())
 
 
 def cmd_diff(args: argparse.Namespace) -> None:
@@ -85,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_embed_args(p)
     p.set_defaults(func=cmd_embed)
 
-    p = sub.add_parser("map", help="embed, project with UMAP, write map.html + wall.html")
+    p = sub.add_parser("wall", help="embed, lay out by similarity, write the wall viewer")
     add_embed_args(p)
     p.add_argument("--n-neighbors", type=int, default=15, help="UMAP local/global balance")
     p.add_argument("--min-dist", type=float, default=0.1, help="UMAP cluster tightness")
@@ -99,16 +99,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--color-by",
         choices=["folder", "top", "none"],
         default="folder",
-        help="colour points by parent folder, top-level folder, or not at all",
+        help="colour photos by parent folder, top-level folder, or not at all",
     )
     p.add_argument(
-        "--open",
-        nargs="?",
-        const="wall",
-        choices=["wall", "map"],
-        help="open a viewer in the browser when done (default: wall)",
+        "--layout",
+        choices=["grid", "free"],
+        default="grid",
+        help="initial layout: grid cells or free UMAP positions (G toggles in the page)",
     )
-    p.set_defaults(func=cmd_map)
+    p.add_argument("--open", action="store_true", help="open the wall in the browser when done")
+    p.set_defaults(func=cmd_wall)
 
     p = sub.add_parser("diff", help="count files in A missing from B (same relative path)")
     p.add_argument("a", type=Path)

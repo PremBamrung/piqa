@@ -194,7 +194,7 @@ Consequences:
 
 ## 4. Roadmap
 
-1. **Consolidate** — this repo: `piqa ingest`, `piqa embed`, `piqa map`, `piqa diff`, with the
+1. **Consolidate** — this repo: `piqa ingest`, `piqa embed`, `piqa wall` (was `piqa map`), `piqa diff`, with the
    `.piqa/` cache and fast decoding.
 2. **`piqa choose` without training** — burst grouping, eye/face-crop sharpness, InsightFace
    blinks, pretrained TOPIQ, rating written into JPEGs, rejects moved to `_rejects/`.
@@ -212,10 +212,10 @@ Status of the recommendations in the May 2026 analyses, as of milestone 1.
 
 | Recommendation | Source | Status in piqa |
 |---|---|---|
-| One command for the whole pipeline | UNIFIED_PIPELINE_PLAN | Done: `piqa map` (embed → UMAP → both viewers) |
-| WebGL scatter (`scattergl`) | ANALYSIS, UNIFIED | Done (`map.html`) |
+| One command for the whole pipeline | UNIFIED_PIPELINE_PLAN | Done: `piqa wall` (embed → UMAP → grid → wall) |
+| WebGL scatter (`scattergl`) | ANALYSIS, UNIFIED | Done, then removed 2026-10-16 with `map.html` (the wall replaces it) |
 | Persistent preview sidebar | ANALYSIS, UNIFIED | Done; click opens the original |
-| Offline Plotly | ANALYSIS, UNIFIED | Done: always inlined from the `plotly` package |
+| Offline Plotly | ANALYSIS, UNIFIED | Removed 2026-10-16 with `map.html` |
 | `--max-images` subset | ANALYSIS, UNIFIED | Done |
 | MPS (Apple GPU) support | ANALYSIS, UNIFIED | Done: cuda → mps → cpu |
 | All image formats, not just JPEG | ANALYSIS | Done (7 extensions) |

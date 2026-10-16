@@ -10,150 +10,495 @@
   #canvas { display: block; cursor: grab; touch-action: none; }
   #canvas.dragging { cursor: grabbing; }
   .chip {
-    position: fixed; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
-    border: 1px solid #222; border-radius: 8px; font-size: 12px; color: #666;
+    position: fixed; background: rgba(0,0,0,0.65); backdrop-filter: blur(8px);
+    border: 1px solid #222; border-radius: 8px; font-size: 12px; color: #777;
   }
   #hud { top: 16px; left: 50%; transform: translateX(-50%); padding: 7px 18px;
-         pointer-events: none; white-space: nowrap; max-width: calc(100vw - 32px);
+         pointer-events: none; white-space: nowrap; max-width: calc(100vw - 560px);
          overflow: hidden; text-overflow: ellipsis; }
   #hud span { color: #ccc; }
-  #reset { bottom: 20px; right: 20px; padding: 7px 14px; cursor: pointer; font-family: inherit; }
-  #reset:hover { color: #ccc; }
+  #search { top: 16px; left: 16px; padding: 4px; display: flex; align-items: center; gap: 6px; }
+  #search input { background: transparent; border: 0; outline: 0; color: #ddd; font: inherit;
+                  width: 220px; padding: 3px 6px; }
+  #search .count { padding-right: 6px; color: #555; }
+  #loading { top: 52px; left: 50%; transform: translateX(-50%); padding: 4px 12px; display: none; }
+  #debug { top: 52px; left: 16px; padding: 4px 10px; display: none; color: #9c9; }
+  #legend { bottom: 20px; left: 20px; padding: 8px 10px; max-height: 40vh; overflow-y: auto; }
+  #legend div { display: flex; align-items: center; gap: 8px; padding: 2px 4px; cursor: pointer;
+                border-radius: 4px; white-space: nowrap; }
+  #legend div:hover { color: #ccc; }
+  #legend div.on { color: #fff; background: #1d1d1d; }
+  #legend div.off { opacity: 0.35; }
+  #legend i { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  #legend b { font-weight: normal; color: #555; }
+  #minimap { bottom: 20px; right: 20px; padding: 0; overflow: hidden; cursor: crosshair; }
+  #minimap canvas { display: block; }
+  #buttons { bottom: 20px; display: flex; gap: 8px; position: fixed; }
+  #buttons button { padding: 7px 12px; cursor: pointer; font-family: inherit; position: static; }
+  #buttons button:hover { color: #ccc; }
   #tooltip { display: none; padding: 4px 8px; font-size: 11px; color: #aaa; pointer-events: none; }
+  #panel { top: 64px; right: 20px; width: 340px; padding: 10px; display: none; pointer-events: none; }
+  #panel.open { display: block; }
+  #panel img { width: 100%; border-radius: 4px; display: block; min-height: 40px; background: #111; }
+  #panel div { margin-top: 8px; font-size: 11px; color: #999; word-break: break-all; }
+  #help { top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 18px 24px; display: none;
+          z-index: 200; line-height: 1.9; color: #aaa; }
+  #help.open { display: block; }
+  #help kbd { display: inline-block; min-width: 64px; color: #fff; }
   #lightbox {
-    display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.94);
-    align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+    display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.95);
+    align-items: center; justify-content: center; flex-direction: column; gap: 10px;
   }
   #lightbox.open { display: flex; }
-  #lightbox img { max-width: 92vw; max-height: 85vh; object-fit: contain; border-radius: 4px; }
+  #lb-img { max-width: 92vw; max-height: calc(100vh - 190px); object-fit: contain; border-radius: 4px; }
   #lb-name { font-size: 12px; color: #777; }
   #lb-name a { color: #6aa9ff; }
+  #lb-strip { display: flex; gap: 6px; max-width: 96vw; overflow-x: auto; padding: 4px; }
+  #lb-strip img { height: 72px; border-radius: 3px; cursor: pointer; opacity: 0.55; outline: 2px solid transparent; }
+  #lb-strip img:hover { opacity: 0.9; }
+  #lb-strip img.cur { opacity: 1; outline-color: #6aa9ff; }
   #lb-close { position: fixed; top: 16px; right: 22px; font-size: 26px; color: #555; cursor: pointer; }
   #lb-close:hover { color: #fff; }
 </style>
 </head>
 <body>
 <canvas id="canvas"></canvas>
-<div id="hud" class="chip">{{TITLE}} · <span id="count"></span> images · scroll to zoom · drag to pan · click to open</div>
-<button id="reset" class="chip">RESET VIEW</button>
+<div id="hud" class="chip">{{TITLE}} · <span id="count"></span> · <span id="mode"></span> · ? for keys</div>
+<label id="search" class="chip"><input id="q" placeholder="search name or folder ( / )" autocomplete="off" spellcheck="false"><span class="count" id="qcount"></span></label>
+<div id="loading" class="chip"></div>
+<div id="debug" class="chip"></div>
+<div id="legend" class="chip"></div>
+<div id="buttons"><button id="toggle" class="chip">GRID / FREE</button><button id="reset" class="chip">RESET</button></div>
+<div id="minimap" class="chip"><canvas id="mini"></canvas></div>
 <div id="tooltip" class="chip"></div>
+<div id="panel" class="chip"><img id="panel-img" alt=""><div id="panel-name"></div></div>
+<div id="help" class="chip">
+  <kbd>drag</kbd> pan · <kbd>wheel</kbd> zoom · <kbd>click</kbd> open<br>
+  <kbd>hover</kbd> outlines the 12 most similar photos in blue<br>
+  <kbd>+ / −</kbd> zoom · <kbd>arrows</kbd> pan · <kbd>0</kbd> reset view<br>
+  <kbd>G</kbd> grid / free layout · <kbd>P</kbd> preview panel<br>
+  <kbd>/</kbd> search · <kbd>Esc</kbd> clear search, filter, close<br>
+  <kbd>legend</kbd> click a folder to show only it<br>
+  lightbox: <kbd>← →</kbd> similar photos · <kbd>F</kbd> original · <kbd>Esc</kbd> close<br>
+  <kbd>D</kbd> frame timing
+</div>
 <div id="lightbox">
   <div id="lb-close">✕</div>
   <img id="lb-img" alt="">
   <div id="lb-name"></div>
+  <div id="lb-strip"></div>
 </div>
 <script>
 const DATA = /*{{DATA}}*/;
 const ITEMS = DATA.items;
 const N = ITEMS.length;
-const SMALL = 128;       // px, long edge of the "s" thumbnail tier
-const MAX_SIZE = 512;    // px, long edge of the "m" tier: never draw bigger than this
+const COLS = DATA.cols, ROWS = DATA.rows, CELL_H = DATA.cellH;
+const GAP = 0.06;              // world units between grid tiles
+const BG = '#0a0a0a';
 const $ = id => document.getElementById(id);
 const canvas = $('canvas');
-const ctx = canvas.getContext('2d');
-$('count').textContent = N;
+const ctx = canvas.getContext('2d', { alpha: false });
+const enc = rel => rel.split('/').map(encodeURIComponent).join('/');
+const url = { s: i => 'thumbs/s/' + enc(ITEMS[i].p) + '.jpg', m: i => 'thumbs/m/' + enc(ITEMS[i].p) + '.jpg',
+              orig: i => '../' + enc(ITEMS[i].p) };
+const nameOf = i => ITEMS[i].p.split('/').pop();
+const dirOf = i => ITEMS[i].p.split('/').slice(0, -1).join('/');
 
-// ── View: item (x, y) in [0,1] maps to (offsetX + x*scale, offsetY + y*scale) ──
-const PADDING = 80;
-let scale, offsetX, offsetY;
-function resetView() {
-  scale = Math.max(100, Math.min(innerWidth, innerHeight) - PADDING * 2);
-  offsetX = (innerWidth - scale) / 2;
-  offsetY = (innerHeight - scale) / 2;
+// ── Geometry. World units: a grid cell is 1 wide and CELL_H tall; the free layout spans COLS ──
+const S = COLS;                                   // free layout: [0,1] → [0,S]
+const aspect = new Float32Array(N);               // h / w, from the atlas tile
+const gridBox = new Float32Array(N * 4);          // x, y, w, h of each photo in its cell
+const cellIndex = new Int32Array(COLS * ROWS).fill(-1);
+ITEMS.forEach((it, i) => {
+  const [, , , aw, ah] = it.a;
+  const a = aw ? ah / aw : 2 / 3;
+  aspect[i] = a;
+  const maxW = 1 - GAP, maxH = CELL_H - GAP;
+  const w = Math.min(maxW, maxH / a), h = w * a;
+  gridBox.set([it.c + (1 - w) / 2, it.r * CELL_H + (CELL_H - h) / 2, w, h], i * 4);
+  cellIndex[it.r * COLS + it.c] = i;
+});
+let layout = DATA.layout === 'free' ? 'free' : 'grid';
+const worldSize = () => layout === 'grid' ? [COLS, ROWS * CELL_H]
+  : [S * Math.max(...ITEMS.map(it => it.x)) || S, S * Math.max(...ITEMS.map(it => it.y)) || S];
+let WORLD = worldSize();
+
+// View: world (wx, wy) → screen (ox + wx * zoom, oy + wy * zoom), in CSS pixels.
+let zoom = 1, ox = 0, oy = 0, W = 0, H = 0, dpr = 1, zoomFit = 1;
+// Free layout: when fitted, tiles are FREE_BASE wide and overlap inside clusters. Zooming in,
+// their on-screen size first grows with √zoom only, slower than the gaps, so piles open up;
+// once they are down to FREE_MIN (Python spreads photo centres at least 0.5 apart, twins
+// 0.42), at ~9x the fitted zoom, they grow with the zoom like the grid, without overlapping.
+const FREE_BASE = 1.2, FREE_MIN = 0.4;
+function freeLong() {
+  const world = Math.max(FREE_BASE * Math.sqrt(zoomFit / zoom), FREE_MIN);
+  return Math.max(world, 14 / zoom);
+}
+function box(i, out) {
+  if (layout === 'grid') { out[0] = gridBox[i*4]; out[1] = gridBox[i*4+1]; out[2] = gridBox[i*4+2]; out[3] = gridBox[i*4+3]; return out; }
+  const L = freeLong(), a = aspect[i];
+  const w = a <= 1 ? L : L / a, h = a <= 1 ? L * a : L;
+  out[0] = ITEMS[i].x * S - w / 2; out[1] = ITEMS[i].y * S - h / 2; out[2] = w; out[3] = h;
+  return out;
+}
+const fitZoom = () => Math.max(1e-3, Math.min((W - 140) / WORLD[0], (H - 140) / WORLD[1]));
+function fit() {
+  zoom = zoomFit = fitZoom();
+  ox = (W - WORLD[0] * zoom) / 2; oy = (H - WORLD[1] * zoom) / 2;
+}
+function centerOn(wx, wy) { ox = W / 2 - wx * zoom; oy = H / 2 - wy * zoom; }
+
+// ── Filters: legend (one folder) and search ──
+let groupFilter = -1, query = '';
+const hay = ITEMS.map(it => it.p.toLowerCase());
+const match = new Uint8Array(N).fill(1);
+let filtered = false;
+function applyFilters() {
+  filtered = groupFilter >= 0 || query !== '';
+  let n = 0;
+  for (let i = 0; i < N; i++) {
+    match[i] = (groupFilter < 0 || ITEMS[i].g === groupFilter) && (!query || hay[i].includes(query)) ? 1 : 0;
+    n += match[i];
+  }
+  $('count').textContent = filtered ? `${n.toLocaleString()} of ${N.toLocaleString()} photos` : `${N.toLocaleString()} photos`;
+  $('qcount').textContent = query ? n.toLocaleString() : '';
+  document.querySelectorAll('#legend div').forEach((el, g) => {
+    el.classList.toggle('on', g === groupFilter);
+    el.classList.toggle('off', groupFilter >= 0 && g !== groupFilter);
+  });
+  renderMinimapBase();
+  saveHash(); requestDraw();
 }
 
-// ── Images: all small thumbs up front, medium thumbs lazily when zoomed in ──
-const small = new Array(N).fill(null);
-const medium = new Array(N).fill(null);
-const mediumRequested = new Uint8Array(N);
-let pending = false;
+// ── Images: atlas sheets for the overview, 128 px and 512 px thumbs on demand ──
+// Every image is decoded off the main thread (decode + createImageBitmap) before its first
+// draw. A small queue keeps ~8 requests in flight, visible tiles first; the thumb tiers are
+// LRU caches whose least recently drawn bitmaps are released.
+const sheets = DATA.atlas.map(() => null);
+async function loadBitmap(src) {
+  const img = new Image();
+  img.src = src;
+  await img.decode();
+  try { return await createImageBitmap(img); } catch { return img; }
+}
+DATA.atlas.forEach((src, n) => loadBitmap(src).then(b => { sheets[n] = b; renderMinimapBase(); requestDraw(); }));
+
+const tiers = { s: { cache: new Map(), cap: 1600 }, m: { cache: new Map(), cap: 250 } };
+const failed = new Set();
+const inflight = new Set();
+let wanted = [];
+const MAX_INFLIGHT = 8;
+let frame = 0;
+const lastDrawn = { s: new Int32Array(N), m: new Int32Array(N) };
+function getBitmap(tier, i) {
+  const t = tiers[tier], b = t.cache.get(i);
+  if (b) { lastDrawn[tier][i] = frame; t.cache.delete(i); t.cache.set(i, b); }  // most recent last
+  return b;
+}
+function store(tier, i, bmp) {
+  const t = tiers[tier];
+  t.cache.set(i, bmp);
+  if (t.cache.size <= t.cap) return;
+  for (const [j, b] of t.cache) {                 // Map order = insertion: oldest first
+    if (t.cache.size <= t.cap) break;
+    if (lastDrawn[tier][j] >= frame - 1) continue;  // still on screen
+    t.cache.delete(j);
+    if (b.close) b.close();
+  }
+}
+function pump() {
+  while (inflight.size < MAX_INFLIGHT && wanted.length) {
+    const [tier, i] = wanted.shift();
+    const key = tier + i;
+    if (inflight.has(key) || failed.has(key) || tiers[tier].cache.has(i)) continue;
+    inflight.add(key);
+    loadBitmap(url[tier](i))
+      .then(b => store(tier, i, b))
+      .catch(() => failed.add(key))
+      .finally(() => { inflight.delete(key); requestDraw(); pump(); });
+  }
+  const n = inflight.size + wanted.length;
+  $('loading').style.display = n ? 'block' : 'none';
+  if (n) $('loading').textContent = `loading ${n} image${n > 1 ? 's' : ''}`;
+}
+window.__wallHooks = true;
+window.__wallReady = () => sheets.every(Boolean) && !inflight.size && !wanted.length;
+
+// ── Drawing: only when something changed ──
+let pending = false, hover = -1;
 function requestDraw() {
   if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; draw(); }); }
 }
-function load(src, onload) {
-  const im = new Image();
-  im.onload = () => { onload(im); requestDraw(); };
-  im.src = src;
-}
-ITEMS.forEach((it, i) => load(it.s, im => { small[i] = im; }));
-
-function sizeOf(i) {
-  // Long edge grows with zoom; aspect ratio from whichever thumb has loaded (3:2 until then).
-  const long = Math.min(MAX_SIZE, Math.max(18, scale * 0.04));
-  const im = medium[i] || small[i];
-  const ratio = im ? im.naturalHeight / im.naturalWidth : 2 / 3;
-  return ratio <= 1 ? { w: long, h: long * ratio } : { w: long / ratio, h: long };
-}
-
-function draw() {
-  canvas.width = innerWidth;
-  canvas.height = innerHeight;
-  for (let i = 0; i < N; i++) {
-    const it = ITEMS[i];
-    const { w, h } = sizeOf(i);
-    const x = offsetX + it.x * scale - w / 2;
-    const y = offsetY + it.y * scale - h / 2;
-    if (x + w < 0 || y + h < 0 || x > canvas.width || y > canvas.height) continue;  // off-screen
-    if (Math.max(w, h) > SMALL * 1.2 && !mediumRequested[i]) {
-      mediumRequested[i] = 1;
-      load(it.m, im => { medium[i] = im; });
+const B = new Float32Array(4);
+window.__drawMs = window.__drawMs || [];
+const timing = [];
+function visibleItems(cb) {
+  const x0 = -ox / zoom, y0 = -oy / zoom, x1 = (W - ox) / zoom, y1 = (H - oy) / zoom;
+  if (layout === 'grid') {
+    const c0 = Math.max(0, Math.floor(x0)), c1 = Math.min(COLS - 1, Math.floor(x1));
+    const r0 = Math.max(0, Math.floor(y0 / CELL_H)), r1 = Math.min(ROWS - 1, Math.floor(y1 / CELL_H));
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const i = cellIndex[r * COLS + c];
+      if (i >= 0) cb(i);
     }
-    const im = (Math.max(w, h) > SMALL * 1.2 && medium[i]) || small[i];
+  } else {
+    for (let i = 0; i < N; i++) {
+      box(i, B);
+      if (B[0] + B[2] < x0 || B[1] + B[3] < y0 || B[0] > x1 || B[1] > y1) continue;
+      cb(i);
+    }
+  }
+}
+function draw() {
+  const t0 = performance.now();
+  frame++;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, H);
+  const want = [];
+  const showBorders = DATA.groups.length > 1;
+  const borders = DATA.groups.map(() => []);
+  visibleItems(i => {
+    box(i, B);
+    const x = ox + B[0] * zoom, y = oy + B[1] * zoom, w = B[2] * zoom, h = B[3] * zoom;
+    const px = Math.max(w, h) * dpr;               // on-screen size in device pixels
+    const tier = px <= 80 ? null : px <= 200 ? 's' : 'm';
+    const dim = filtered && !match[i];
+    ctx.globalAlpha = dim ? 0.12 : 1;
+    let im = tier === 'm' ? getBitmap('m', i) : null;
+    if (!im && tier) im = getBitmap('s', i);
+    if (tier && !dim) {
+      if (tier === 'm' && !tiers.m.cache.has(i)) want.push(['m', i]);
+      else if (tier === 's' && !tiers.s.cache.has(i)) want.push(['s', i]);
+    }
     if (im) {
       ctx.drawImage(im, x, y, w, h);
     } else {
-      ctx.fillStyle = '#1c1c1c';
-      ctx.fillRect(x, y, w, h);
+      const a = ITEMS[i].a, sheet = sheets[a[0]];
+      if (sheet) ctx.drawImage(sheet, a[1], a[2], a[3], a[4], x, y, w, h);
+      else { ctx.fillStyle = '#1c1c1c'; ctx.fillRect(x, y, w, h); }
     }
+    // Free layout tiles overlap: borders would cover the photos until they are big enough.
+    if (showBorders && !dim && w >= (layout === 'grid' ? 8 : 24)) borders[ITEMS[i].g].push(x, y, w, h);
+  });
+  ctx.globalAlpha = 1;
+  // Folder colours: one path per folder, so the cost is one stroke per colour, not per photo.
+  const lw = Math.max(1, Math.min(3, zoom * 0.02));
+  ctx.lineWidth = lw;
+  borders.forEach((rects, g) => {
+    if (!rects.length) return;
+    ctx.strokeStyle = DATA.groups[g].color;
+    ctx.beginPath();
+    for (let k = 0; k < rects.length; k += 4) ctx.rect(rects[k] - lw / 2, rects[k+1] - lw / 2, rects[k+2] + lw, rects[k+3] + lw);
+    ctx.stroke();
+  });
+  if (hover >= 0) {
+    // Its 12 most similar photos, brighter for the closest, wherever the layout put them.
+    const nb = ITEMS[hover].n;
+    ctx.lineWidth = 2;
+    nb.forEach((j, k) => {
+      box(j, B);
+      ctx.strokeStyle = `rgba(106,169,255,${(1 - k / (nb.length + 2)).toFixed(2)})`;
+      ctx.strokeRect(ox + B[0] * zoom - 1, oy + B[1] * zoom - 1, B[2] * zoom + 2, B[3] * zoom + 2);
+    });
+    box(hover, B);
+    ctx.lineWidth = 2; ctx.strokeStyle = '#fff';
+    ctx.strokeRect(ox + B[0] * zoom - 2, oy + B[1] * zoom - 2, B[2] * zoom + 4, B[3] * zoom + 4);
   }
+  // Load what's missing, centre of the screen first.
+  const cx = W / 2, cy = H / 2;
+  if (want.length > 1) {
+    want.sort((p, q) => dist2(p[1], cx, cy) - dist2(q[1], cx, cy));
+  }
+  wanted = want.slice(0, 96);
+  pump();
+  drawMinimap();
+  const ms = performance.now() - t0;
+  window.__drawMs.push(ms);
+  timing.push(ms); if (timing.length > 30) timing.shift();
+  if (debugOn) $('debug').textContent =
+    `draw ${(timing.reduce((a, b) => a + b, 0) / timing.length).toFixed(1)} ms · s ${tiers.s.cache.size} · m ${tiers.m.cache.size}`;
+}
+function dist2(i, cx, cy) {
+  box(i, B);
+  const dx = ox + (B[0] + B[2] / 2) * zoom - cx, dy = oy + (B[1] + B[3] / 2) * zoom - cy;
+  return dx * dx + dy * dy;
 }
 
+// ── Hit testing: a cell lookup on the grid, a scan (topmost first) in the free layout ──
 function hitTest(mx, my) {
-  let best = -1, bestDist = Infinity;
-  for (let i = 0; i < N; i++) {
-    const { w, h } = sizeOf(i);
-    const dx = mx - (offsetX + ITEMS[i].x * scale);
-    const dy = my - (offsetY + ITEMS[i].y * scale);
-    if (Math.abs(dx) < w / 2 && Math.abs(dy) < h / 2 && dx * dx + dy * dy < bestDist) {
-      bestDist = dx * dx + dy * dy;
-      best = i;
-    }
+  const wx = (mx - ox) / zoom, wy = (my - oy) / zoom;
+  if (layout === 'grid') {
+    const c = Math.floor(wx), r = Math.floor(wy / CELL_H);
+    if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return -1;
+    const i = cellIndex[r * COLS + c];
+    if (i < 0) return -1;
+    box(i, B);
+    return wx >= B[0] && wx <= B[0] + B[2] && wy >= B[1] && wy <= B[1] + B[3] ? i : -1;
   }
-  return best;
+  for (let i = N - 1; i >= 0; i--) {
+    box(i, B);
+    if (wx >= B[0] && wx <= B[0] + B[2] && wy >= B[1] && wy <= B[1] + B[3]) return i;
+  }
+  return -1;
 }
 
-// ── Lightbox: medium thumb immediately, swapped for the original once it loads ──
-function openLightbox(i) {
-  const it = ITEMS[i];
+// ── Minimap: every photo as a dot in its folder colour, plus the viewport ──
+const mini = $('mini'), mctx = mini.getContext('2d');
+const MINI_MAX = 180;
+let miniBase = null, miniScale = 1;
+function renderMinimapBase() {
+  miniScale = MINI_MAX / Math.max(WORLD[0], WORLD[1]);
+  const w = Math.max(20, Math.round(WORLD[0] * miniScale)), h = Math.max(20, Math.round(WORLD[1] * miniScale));
+  mini.width = w * dpr; mini.height = h * dpr;
+  mini.style.width = w + 'px'; mini.style.height = h + 'px';
+  miniBase = document.createElement('canvas');
+  miniBase.width = mini.width; miniBase.height = mini.height;
+  const b = miniBase.getContext('2d');
+  b.scale(dpr, dpr);
+  const d = Math.max(1, miniScale * 0.8);
+  for (let i = 0; i < N; i++) {
+    box(i, B);
+    b.globalAlpha = filtered && !match[i] ? 0.12 : 0.9;
+    b.fillStyle = DATA.groups[ITEMS[i].g].color;
+    b.fillRect((B[0] + B[2] / 2) * miniScale - d / 2, (B[1] + B[3] / 2) * miniScale - d / 2, d, d);
+  }
+  requestDraw();
+}
+function drawMinimap() {
+  if (!miniBase) return;
+  mctx.setTransform(1, 0, 0, 1, 0, 0);
+  mctx.clearRect(0, 0, mini.width, mini.height);
+  mctx.drawImage(miniBase, 0, 0);
+  mctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  mctx.strokeStyle = '#fff'; mctx.lineWidth = 1;
+  mctx.strokeRect(-ox / zoom * miniScale, -oy / zoom * miniScale, W / zoom * miniScale, H / zoom * miniScale);
+}
+function miniJump(e) {
+  const r = mini.getBoundingClientRect();
+  centerOn((e.clientX - r.left) / miniScale, (e.clientY - r.top) / miniScale);
+  saveHash(); requestDraw();
+}
+let miniDrag = false;
+mini.addEventListener('pointerdown', e => { miniDrag = true; mini.setPointerCapture(e.pointerId); miniJump(e); });
+mini.addEventListener('pointermove', e => { if (miniDrag) miniJump(e); });
+mini.addEventListener('pointerup', () => { miniDrag = false; });
+
+// ── Legend ──
+DATA.groups.forEach((g, n) => {
+  const el = document.createElement('div');
+  el.innerHTML = '<i></i><span></span> <b></b>';
+  el.querySelector('i').style.background = g.color;
+  el.querySelector('span').textContent = g.name;
+  el.querySelector('b').textContent = g.count.toLocaleString();
+  el.addEventListener('click', () => { groupFilter = groupFilter === n ? -1 : n; applyFilters(); });
+  $('legend').appendChild(el);
+});
+if (DATA.groups.length < 2) $('legend').style.display = 'none';
+
+// ── Preview panel ──
+let panelOn = false;
+function updatePanel() {
+  $('panel').classList.toggle('open', panelOn && hover >= 0);
+  if (!panelOn || hover < 0) return;
+  const src = url.m(hover);
+  if ($('panel-img').dataset.i !== String(hover)) {
+    $('panel-img').dataset.i = hover;
+    $('panel-img').src = src;
+    $('panel-name').textContent = ITEMS[hover].p;
+  }
+}
+
+// ── Lightbox: the photo, then its 12 most similar photos as a strip ──
+let lbAnchor = -1, lbPos = 0;
+const lbList = () => [lbAnchor, ...ITEMS[lbAnchor].n];
+function openLightbox(i) { lbAnchor = i; lbPos = 0; buildStrip(); showLightbox(); $('lightbox').classList.add('open'); }
+function buildStrip() {
+  const strip = $('lb-strip');
+  strip.innerHTML = '';
+  lbList().forEach((j, k) => {
+    const im = document.createElement('img');
+    im.src = url.s(j);
+    im.title = ITEMS[j].p;
+    im.addEventListener('click', e => { e.stopPropagation(); if (k === 0) return; lbAnchor = j; lbPos = 0; buildStrip(); showLightbox(); });
+    strip.appendChild(im);
+  });
+}
+function showLightbox() {
+  const i = lbList()[lbPos];
   const img = $('lb-img');
-  img.src = it.m;
-  const full = new Image();
-  full.onload = () => { if (img.dataset.i === String(i)) img.src = it.orig; };
   img.dataset.i = i;
-  full.src = it.orig;
+  img.src = url.m(i);
+  const full = new Image();
+  full.onload = () => { if (img.dataset.i === String(i)) img.src = full.src; };
+  full.src = url.orig(i);
   $('lb-name').innerHTML = '';
   const link = document.createElement('a');
-  link.href = it.orig;
-  link.target = '_blank';
-  link.textContent = it.dir ? `${it.dir}/${it.name}` : it.name;
-  $('lb-name').appendChild(link);
-  $('lightbox').classList.add('open');
+  link.href = url.orig(i); link.target = '_blank'; link.textContent = ITEMS[i].p;
+  $('lb-name').append(link, `  ·  ${lbPos === 0 ? 'photo' : 'similar #' + lbPos}  ·  ← → similar  ·  F original`);
+  [...$('lb-strip').children].forEach((el, k) => el.classList.toggle('cur', k === lbPos));
+  $('lb-strip').children[lbPos]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
+const lbOpen = () => $('lightbox').classList.contains('open');
 const closeLightbox = () => $('lightbox').classList.remove('open');
 $('lb-close').addEventListener('click', closeLightbox);
 $('lightbox').addEventListener('click', e => { if (e.target.id === 'lightbox') closeLightbox(); });
-addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ── View state in the URL hash: #l=grid&x=..&y=..&z=..&f=..&q=.. ──
+let hashTimer = 0;
+function saveHash() {
+  clearTimeout(hashTimer);
+  hashTimer = setTimeout(() => {
+    const p = new URLSearchParams({ l: layout, x: ((W / 2 - ox) / zoom).toFixed(2),
+      y: ((H / 2 - oy) / zoom).toFixed(2), z: zoom.toFixed(3) });
+    if (groupFilter >= 0) p.set('f', groupFilter);
+    if (query) p.set('q', query);
+    try { history.replaceState(null, '', '#' + p); } catch {}
+  }, 250);
+}
+function loadHash() {
+  try {
+    const p = new URLSearchParams(location.hash.slice(1));
+    if (!p.has('z')) return false;
+    if (p.get('l') === 'grid' || p.get('l') === 'free') { layout = p.get('l'); WORLD = worldSize(); zoomFit = fitZoom(); }
+    zoom = Math.max(1e-3, +p.get('z') || zoom);
+    centerOn(+p.get('x') || 0, +p.get('y') || 0);
+    const f = p.has('f') ? +p.get('f') : -1;
+    groupFilter = f >= 0 && f < DATA.groups.length ? f : -1;
+    query = (p.get('q') || '').toLowerCase();
+    $('q').value = query;
+    return true;
+  } catch { return false; }
+}
+
+// ── Layout toggle: keep the photo at the centre of the screen in view ──
+function toggleLayout() {
+  const i = hitTest(W / 2, H / 2) >= 0 ? hitTest(W / 2, H / 2) : nearestToCenter();
+  layout = layout === 'grid' ? 'free' : 'grid';
+  WORLD = worldSize();
+  zoomFit = fitZoom();
+  $('mode').textContent = layout;
+  if (i >= 0) { box(i, B); centerOn(B[0] + B[2] / 2, B[1] + B[3] / 2); } else fit();
+  renderMinimapBase(); saveHash(); requestDraw();
+}
+function nearestToCenter() {
+  let best = -1, bd = Infinity;
+  for (let i = 0; i < N; i++) { const d = dist2(i, W / 2, H / 2); if (d < bd) { bd = d; best = i; } }
+  return best;
+}
 
 // ── Pointer: drag to pan, click to open, wheel / pinch to zoom ──
 function zoomAt(mx, my, factor) {
-  offsetX = mx - (mx - offsetX) * factor;
-  offsetY = my - (my - offsetY) * factor;
-  scale *= factor;
-  requestDraw();
+  const z = Math.min(Math.max(zoom * factor, 1e-3), 4000);
+  factor = z / zoom;
+  ox = mx - (mx - ox) * factor;
+  oy = my - (my - oy) * factor;
+  zoom = z;
+  saveHash(); requestDraw();
 }
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+  zoomAt(e.clientX, e.clientY, Math.exp(-Math.max(-100, Math.min(100, e.deltaY)) * 0.0015));
 }, { passive: false });
 
 const pointers = new Map();
@@ -169,12 +514,13 @@ canvas.addEventListener('pointermove', e => {
   if (!prev) {
     const i = hitTest(e.clientX, e.clientY);
     const tip = $('tooltip');
-    tip.style.display = i < 0 ? 'none' : 'block';
+    tip.style.display = i < 0 || panelOn ? 'none' : 'block';
     if (i >= 0) {
-      tip.textContent = ITEMS[i].name;
+      tip.textContent = nameOf(i);
       tip.style.left = (e.clientX + 14) + 'px';
       tip.style.top = (e.clientY - 28) + 'px';
     }
+    if (i !== hover) { hover = i; updatePanel(); requestDraw(); }
     return;
   }
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -187,9 +533,8 @@ canvas.addEventListener('pointermove', e => {
   } else if (pointers.size === 1) {
     const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
     if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
-    offsetX += dx;
-    offsetY += dy;
-    requestDraw();
+    ox += dx; oy += dy;
+    saveHash(); requestDraw();
   }
 });
 function pointerEnd(e) {
@@ -203,11 +548,72 @@ function pointerEnd(e) {
 }
 canvas.addEventListener('pointerup', pointerEnd);
 canvas.addEventListener('pointercancel', e => { moved = true; pointerEnd(e); });
+canvas.addEventListener('pointerleave', () => { if (hover >= 0) { hover = -1; $('tooltip').style.display = 'none'; updatePanel(); requestDraw(); } });
 
-$('reset').addEventListener('click', () => { resetView(); requestDraw(); });
-addEventListener('resize', requestDraw);
-resetView();
-draw();
+// ── Keyboard ──
+let debugOn = false;
+$('q').addEventListener('input', () => { query = $('q').value.trim().toLowerCase(); applyFilters(); });
+$('q').addEventListener('keydown', e => {
+  if (e.key === 'Escape') { $('q').value = ''; query = ''; applyFilters(); $('q').blur(); }
+  e.stopPropagation();
+});
+addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (lbOpen()) {
+    const n = lbList().length;
+    if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'ArrowRight') { lbPos = (lbPos + 1) % n; showLightbox(); }
+    else if (e.key === 'ArrowLeft') { lbPos = (lbPos - 1 + n) % n; showLightbox(); }
+    else if (e.key === 'f' || e.key === 'F') window.open(url.orig(lbList()[lbPos]), '_blank');
+    else return;
+    e.preventDefault(); return;
+  }
+  const step = 120;
+  switch (e.key) {
+    case '+': case '=': zoomAt(W / 2, H / 2, 1.25); break;
+    case '-': case '_': zoomAt(W / 2, H / 2, 0.8); break;
+    case 'ArrowLeft': ox += step; break;
+    case 'ArrowRight': ox -= step; break;
+    case 'ArrowUp': oy += step; break;
+    case 'ArrowDown': oy -= step; break;
+    case '0': fit(); break;
+    case 'g': case 'G': toggleLayout(); break;
+    case 'p': case 'P': panelOn = !panelOn; updatePanel(); break;
+    case 'd': case 'D': debugOn = !debugOn; $('debug').style.display = debugOn ? 'block' : 'none'; break;
+    case '?': $('help').classList.toggle('open'); break;
+    case '/': $('q').focus(); break;
+    case 'Escape':
+      if ($('help').classList.contains('open')) $('help').classList.remove('open');
+      else { groupFilter = -1; query = ''; $('q').value = ''; applyFilters(); }
+      break;
+    default: return;
+  }
+  e.preventDefault(); saveHash(); requestDraw();
+});
+$('help').addEventListener('click', () => $('help').classList.remove('open'));
+$('reset').addEventListener('click', () => { fit(); saveHash(); requestDraw(); });
+$('toggle').addEventListener('click', toggleLayout);
+
+// ── Size: the canvas backing store follows devicePixelRatio and changes only on resize ──
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = innerWidth; H = innerHeight;
+  zoomFit = fitZoom();
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  $('buttons').style.right = (20 + mini.getBoundingClientRect().width + 10) + 'px';
+}
+addEventListener('resize', () => {
+  const cx = (W / 2 - ox) / zoom, cy = (H / 2 - oy) / zoom;
+  resize(); centerOn(cx, cy); renderMinimapBase(); requestDraw();
+});
+
+resize();
+if (!loadHash()) fit();
+$('mode').textContent = layout;
+renderMinimapBase();
+resize();                  // the buttons sit left of the minimap, now that it has a size
+applyFilters();
 </script>
 </body>
 </html>
